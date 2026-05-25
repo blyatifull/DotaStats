@@ -3,7 +3,7 @@ import Image from 'next/image'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowRight, Users, Swords, Map, TrendingUp, Trophy, Clock, Target } from 'lucide-react'
+import { ArrowRight, Users, Swords, Map, TrendingUp, Trophy, Clock } from 'lucide-react'
 import { HEROES, HERO_LIST } from '@/lib/constants/heroes'
 import { formatPercent } from '@/lib/utils/stats-calc'
 import { cn } from '@/lib/utils'
@@ -29,7 +29,7 @@ async function getData() {
 
     return {
       heroStats: heroesData.stats as HeroStats[],
-      recentMatches: matchesData.matches as ProMatch[],
+      recentMatches: (matchesData.matches as ProMatch[]).slice(0, 5),
       draftStats: draftsData.stats as DraftStats[],
     }
   } catch (error) {
@@ -41,25 +41,22 @@ async function getData() {
 export default async function HomePage() {
   const { heroStats, recentMatches, draftStats } = await getData()
 
-  // Top heroes by winrate (minimum matches)
+  // Top heroes by winrate (minimum 50 matches for reliability)
   const topWinrate = heroStats
-    .filter(s => s.matchCount >= 10)
+    .filter(s => s.matchCount >= 50)
     .sort((a, b) => b.winRate - a.winRate)
-    .slice(0, 6)
+    .slice(0, 5)
 
   // Most picked heroes
   const mostPicked = [...heroStats]
     .sort((a, b) => b.matchCount - a.matchCount)
-    .slice(0, 6)
+    .slice(0, 5)
 
   // Most contested (pick + ban)
-  const mostContested = draftStats.slice(0, 6)
+  const mostContested = draftStats.slice(0, 5)
 
   // Calculate totals
   const totalMatches = heroStats.reduce((acc, s) => acc + s.matchCount, 0) / 10
-  const avgWinrate = heroStats.length > 0 
-    ? heroStats.reduce((acc, s) => acc + s.winRate, 0) / heroStats.length 
-    : 50
 
   return (
     <div className="min-h-screen">
@@ -82,8 +79,8 @@ export default async function HomePage() {
             </p>
           </div>
           
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Stats Cards - 3 cards evenly distributed */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
             <Card className="border-border/40 bg-card/50 backdrop-blur hover:border-primary/30 transition-colors">
               <CardContent className="p-6">
                 <div className="flex items-center gap-4">
@@ -112,20 +109,6 @@ export default async function HomePage() {
               </CardContent>
             </Card>
             
-            <Card className="border-border/40 bg-card/50 backdrop-blur hover:border-blue-500/30 transition-colors">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                    <Target className="w-6 h-6 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold">{avgWinrate.toFixed(1)}%</p>
-                    <p className="text-sm text-muted-foreground">Avg Winrate</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
             <Card className="border-border/40 bg-card/50 backdrop-blur hover:border-yellow-500/30 transition-colors">
               <CardContent className="p-6">
                 <div className="flex items-center gap-4">
@@ -149,7 +132,7 @@ export default async function HomePage() {
       <div className="container py-12">
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Top Winrate Heroes */}
-          <Card className="border-border/40 bg-card/50 backdrop-blur">
+          <Card className="border-border/40 bg-card/50 backdrop-blur flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-lg bg-green-500/10">
@@ -163,7 +146,8 @@ export default async function HomePage() {
                 </Button>
               </Link>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1">
+              <p className="text-xs text-muted-foreground mb-3">Minimum 50 matches</p>
               <div className="space-y-2">
                 {topWinrate.map((stat, i) => {
                   const hero = HEROES[stat.heroId]
@@ -207,7 +191,7 @@ export default async function HomePage() {
           </Card>
 
           {/* Most Picked Heroes */}
-          <Card className="border-border/40 bg-card/50 backdrop-blur">
+          <Card className="border-border/40 bg-card/50 backdrop-blur flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-lg bg-primary/10">
@@ -221,7 +205,8 @@ export default async function HomePage() {
                 </Button>
               </Link>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1">
+              <p className="text-xs text-muted-foreground mb-3">By pick count</p>
               <div className="space-y-2">
                 {mostPicked.map((stat, i) => {
                   const hero = HEROES[stat.heroId]
@@ -266,8 +251,8 @@ export default async function HomePage() {
             </CardContent>
           </Card>
 
-          {/* Recent Matches */}
-          <Card className="border-border/40 bg-card/50 backdrop-blur">
+          {/* Recent Matches - Limited to 5 */}
+          <Card className="border-border/40 bg-card/50 backdrop-blur flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-lg bg-blue-500/10">
@@ -281,9 +266,10 @@ export default async function HomePage() {
                 </Button>
               </Link>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1">
+              <p className="text-xs text-muted-foreground mb-3">Latest 5 matches</p>
               <div className="space-y-2">
-                {recentMatches.map(match => {
+                {recentMatches.slice(0, 5).map(match => {
                   const date = new Date(match.startTime * 1000)
                   const duration = Math.floor(match.duration / 60)
                   return (
@@ -294,10 +280,10 @@ export default async function HomePage() {
                     >
                       <div className="flex items-center justify-between mb-2">
                         <span className={cn(
-                          'font-medium text-sm truncate max-w-24',
+                          'font-medium text-sm truncate max-w-20',
                           match.radiantWin ? 'text-green-400' : 'text-muted-foreground'
                         )}>
-                          {match.radiantTeamName}
+                          {match.radiantTeamName || 'Radiant'}
                         </span>
                         <div className="flex items-center gap-2">
                           <span className={cn(
@@ -315,14 +301,14 @@ export default async function HomePage() {
                           </span>
                         </div>
                         <span className={cn(
-                          'font-medium text-sm truncate max-w-24 text-right',
+                          'font-medium text-sm truncate max-w-20 text-right',
                           !match.radiantWin ? 'text-primary' : 'text-muted-foreground'
                         )}>
-                          {match.direTeamName}
+                          {match.direTeamName || 'Dire'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span className="truncate max-w-32">{match.leagueName || 'Pro Match'}</span>
+                        <span className="truncate max-w-28">{match.leagueName || 'Pro Match'}</span>
                         <span>{duration}m | {date.toLocaleDateString()}</span>
                       </div>
                     </Link>
