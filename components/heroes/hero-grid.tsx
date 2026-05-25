@@ -84,7 +84,6 @@ export function HeroGrid({ stats }: HeroGridProps) {
               </div>
             </div>
 
-            {/* Role filter */}
             <select
               value={roleFilter || ''}
               onChange={(e) => setRoleFilter(e.target.value || null)}
