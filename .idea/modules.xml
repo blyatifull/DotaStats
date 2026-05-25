@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/Dota2ProAnalytics.iml" filepath="$PROJECT_DIR$/.idea/Dota2ProAnalytics.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/DotaStats.iml" filepath="$PROJECT_DIR$/.idea/DotaStats.iml" />
     </modules>
   </component>
 </project>

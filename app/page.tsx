@@ -1,389 +1,312 @@
 import Link from 'next/link'
 import Image from 'next/image'
+import { Swords, Users, Trophy, TrendingUp, Activity } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowRight, Users, Swords, Map, TrendingUp, Trophy, Clock } from 'lucide-react'
-import { HEROES, HERO_LIST } from '@/lib/constants/heroes'
-import { formatPercent } from '@/lib/utils/stats-calc'
-import { cn } from '@/lib/utils'
-import type { HeroStats, ProMatch, DraftStats } from '@/types/dota'
-
-async function getData() {
-  const baseUrl = process.env.VERCEL_URL 
-    ? `https://${process.env.VERCEL_URL}` 
-    : 'http://localhost:3000'
-  
-  try {
-    const [heroesRes, matchesRes, draftsRes] = await Promise.all([
-      fetch(`${baseUrl}/api/heroes`, { next: { revalidate: 3600 } }),
-      fetch(`${baseUrl}/api/matches?limit=5`, { next: { revalidate: 300 } }),
-      fetch(`${baseUrl}/api/drafts`, { next: { revalidate: 1800 } }),
-    ])
-
-    const [heroesData, matchesData, draftsData] = await Promise.all([
-      heroesRes.ok ? heroesRes.json() : { stats: [] },
-      matchesRes.ok ? matchesRes.json() : { matches: [] },
-      draftsRes.ok ? draftsRes.json() : { stats: [] },
-    ])
-
-    return {
-      heroStats: heroesData.stats as HeroStats[],
-      recentMatches: (matchesData.matches as ProMatch[]).slice(0, 5),
-      draftStats: draftsData.stats as DraftStats[],
-    }
-  } catch (error) {
-    console.error('Error fetching home data:', error)
-    return { heroStats: [], recentMatches: [], draftStats: [] }
-  }
-}
+import { getHeroes, getHeroStats } from '@/lib/api/stratz'
+import { getProMatches, getTeams } from '@/lib/api/opendota'
+import { HERO_ICON_URL, formatPercent, formatRelativeTime, formatDuration } from '@/lib/constants'
 
 export default async function HomePage() {
-  const { heroStats, recentMatches, draftStats } = await getData()
+  const [heroes, heroStats, proMatches, teams] = await Promise.all([
+    getHeroes().catch(() => []),
+    getHeroStats().catch(() => []),
+    getProMatches().catch(() => []),
+    getTeams().catch(() => []),
+  ])
 
-  // Top heroes by winrate (minimum 50 matches for reliability)
-  const topWinrate = heroStats
-    .filter(s => s.matchCount >= 50)
-    .sort((a, b) => b.winRate - a.winRate)
-    .slice(0, 5)
+  const heroMap = new Map(heroes.map((h) => [h.id, h]))
 
-  // Most picked heroes
-  const mostPicked = [...heroStats]
-    .sort((a, b) => b.matchCount - a.matchCount)
-    .slice(0, 5)
+  // Get top meta heroes by pick rate
+  const topHeroes = [...heroStats]
+    .sort((a, b) => b.pickRate - a.pickRate)
+    .slice(0, 8)
+    .map((stat) => ({
+      hero: heroMap.get(stat.heroId),
+      stats: stat,
+    }))
+    .filter((h) => h.hero)
 
-  // Most contested (pick + ban)
-  const mostContested = draftStats.slice(0, 5)
+  // Get top teams
+  const topTeams = teams.slice(0, 6)
 
-  // Calculate totals
-  const totalMatches = heroStats.reduce((acc, s) => acc + s.matchCount, 0) / 10
+  // Recent matches
+  const recentMatches = proMatches.slice(0, 5)
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section with gradient */}
-      <section className="relative border-b border-border/40">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent" />
-        
-        <div className="container relative py-16">
-          <div className="text-center mb-12">
-            <Badge variant="outline" className="mb-4 border-primary/30 text-primary">
-              Pro Match Analytics
+      {/* Hero Section */}
+      <section className="relative overflow-hidden border-b border-border bg-gradient-to-b from-primary/5 to-background">
+        <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-5" />
+        <div className="relative mx-auto max-w-7xl px-4 py-16 lg:px-8 lg:py-24">
+          <div className="text-center">
+            <Badge variant="outline" className="mb-4">
+              Powered by Stratz & OpenDota
             </Badge>
-            <h1 className="text-5xl font-bold mb-4 tracking-tight">
-              Dota 2 <span className="text-primary">Pro</span> Analytics
+            <h1 className="text-balance text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
+              Dota 2 Statistics
+              <br />
+              <span className="text-primary">& Analytics</span>
             </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Comprehensive statistics and analysis from professional Dota 2 matches. 
-              Track hero meta, draft trends, and ward placements from TI and Major tournaments.
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground text-pretty">
+              Comprehensive hero statistics, team rosters, tournament brackets,
+              and detailed match analysis with gold/XP graphs and win predictions.
             </p>
+            <div className="mt-8 flex flex-wrap justify-center gap-4">
+              <Button asChild size="lg">
+                <Link href="/heroes">
+                  <Swords className="mr-2 h-5 w-5" />
+                  Browse Heroes
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg">
+                <Link href="/tournaments">
+                  <Trophy className="mr-2 h-5 w-5" />
+                  View Tournaments
+                </Link>
+              </Button>
+            </div>
           </div>
-          
-          {/* Stats Cards - 3 cards evenly distributed */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            <Card className="border-border/40 bg-card/50 backdrop-blur hover:border-primary/30 transition-colors">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-primary/10 border border-primary/20">
-                    <Users className="w-6 h-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold">{HERO_LIST.length}</p>
-                    <p className="text-sm text-muted-foreground">Heroes</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="border-border/40 bg-card/50 backdrop-blur hover:border-green-500/30 transition-colors">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20">
-                    <TrendingUp className="w-6 h-6 text-green-500" />
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold">{Math.round(totalMatches)}+</p>
-                    <p className="text-sm text-muted-foreground">Pro Matches</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="border-border/40 bg-card/50 backdrop-blur hover:border-yellow-500/30 transition-colors">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
-                    <Trophy className="w-6 h-6 text-yellow-500" />
-                  </div>
-                  <div>
-                    <p className="text-3xl font-bold truncate">
-                      {mostContested[0]?.heroName?.split(' ')[0] || 'N/A'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Most Contested</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        </div>
+      </section>
+
+      {/* Quick Stats */}
+      <section className="border-b border-border bg-card/50">
+        <div className="mx-auto max-w-7xl px-4 py-8 lg:px-8">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-primary">{heroes.length}+</p>
+              <p className="text-sm text-muted-foreground">Heroes</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-primary">{teams.length}+</p>
+              <p className="text-sm text-muted-foreground">Pro Teams</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-primary">
+                {proMatches.length}+
+              </p>
+              <p className="text-sm text-muted-foreground">Recent Matches</p>
+            </div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-primary">Live</p>
+              <p className="text-sm text-muted-foreground">Data Updates</p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Main Content */}
-      <div className="container py-12">
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Top Winrate Heroes */}
-          <Card className="border-border/40 bg-card/50 backdrop-blur flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-green-500/10">
-                  <TrendingUp className="w-4 h-4 text-green-500" />
-                </div>
-                <CardTitle className="text-lg">Top Win Rate</CardTitle>
-              </div>
-              <Link href="/heroes">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
-                  View All <ArrowRight className="w-4 h-4 ml-1" />
+      <section className="mx-auto max-w-7xl px-4 py-12 lg:px-8">
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Meta Heroes */}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Meta Heroes
+                </CardTitle>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/heroes">View All</Link>
                 </Button>
-              </Link>
-            </CardHeader>
-            <CardContent className="flex-1">
-              <p className="text-xs text-muted-foreground mb-3">Minimum 50 matches</p>
-              <div className="space-y-2">
-                {topWinrate.map((stat, i) => {
-                  const hero = HEROES[stat.heroId]
-                  if (!hero) return null
-                  return (
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {topHeroes.map(({ hero, stats }) => (
                     <Link
-                      key={stat.heroId}
-                      href={`/heroes/${stat.heroId}`}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary/50 transition-all group"
+                      key={hero!.id}
+                      href={`/heroes/${hero!.id}`}
+                      className="group flex items-center gap-3 rounded-lg border border-border bg-secondary/50 p-3 transition-all hover:border-primary/50 hover:bg-secondary"
                     >
-                      <span className="text-sm font-bold text-muted-foreground w-5">{i + 1}</span>
-                      <div className="relative">
+                      <div className="relative h-12 w-12 overflow-hidden rounded-lg border border-border">
                         <Image
-                          src={hero.icon}
-                          alt={hero.localizedName}
-                          width={36}
-                          height={36}
-                          className="rounded-lg border border-border/40 group-hover:border-primary/40 transition-colors"
+                          src={HERO_ICON_URL(hero!.shortName)}
+                          alt={hero!.displayName}
+                          fill
+                          className="object-cover"
+                          sizes="48px"
                         />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{hero.localizedName}</p>
-                        <p className="text-xs text-muted-foreground">{stat.matchCount} matches</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {hero!.displayName}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span
+                            className={
+                              stats.winRate >= 52
+                                ? 'text-radiant'
+                                : stats.winRate <= 48
+                                  ? 'text-dire'
+                                  : ''
+                            }
+                          >
+                            {formatPercent(stats.winRate, 1)}
+                          </span>
+                          <span className="text-border">|</span>
+                          <span>{formatPercent(stats.pickRate, 1)}</span>
+                        </div>
                       </div>
-                      <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30">
-                        {formatPercent(stat.winRate)}
-                      </Badge>
                     </Link>
-                  )
-                })}
-                {topWinrate.length === 0 && (
-                  <div className="text-center py-8">
-                    <div className="w-12 h-12 rounded-full bg-secondary/50 flex items-center justify-center mx-auto mb-3">
-                      <TrendingUp className="w-6 h-6 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">Loading statistics...</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Most Picked Heroes */}
-          <Card className="border-border/40 bg-card/50 backdrop-blur flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Users className="w-4 h-4 text-primary" />
+                  ))}
                 </div>
-                <CardTitle className="text-lg">Most Picked</CardTitle>
-              </div>
-              <Link href="/drafts">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
-                  View All <ArrowRight className="w-4 h-4 ml-1" />
+              </CardContent>
+            </Card>
+
+            {/* Recent Pro Matches */}
+            <Card className="mt-6">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-primary" />
+                  Recent Pro Matches
+                </CardTitle>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/tournaments">View All</Link>
                 </Button>
-              </Link>
-            </CardHeader>
-            <CardContent className="flex-1">
-              <p className="text-xs text-muted-foreground mb-3">By pick count</p>
-              <div className="space-y-2">
-                {mostPicked.map((stat, i) => {
-                  const hero = HEROES[stat.heroId]
-                  if (!hero) return null
-                  return (
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {recentMatches.map((match) => (
                     <Link
-                      key={stat.heroId}
-                      href={`/heroes/${stat.heroId}`}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary/50 transition-all group"
+                      key={match.id}
+                      href={`/tournaments/match/${match.id}`}
+                      className="flex items-center justify-between gap-4 rounded-lg border border-border bg-secondary/50 p-3 transition-all hover:border-primary/50 hover:bg-secondary"
                     >
-                      <span className="text-sm font-bold text-muted-foreground w-5">{i + 1}</span>
-                      <div className="relative">
-                        <Image
-                          src={hero.icon}
-                          alt={hero.localizedName}
-                          width={36}
-                          height={36}
-                          className="rounded-lg border border-border/40 group-hover:border-primary/40 transition-colors"
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`h-2 w-2 rounded-full ${
+                            match.didRadiantWin ? 'bg-radiant' : 'bg-dire'
+                          }`}
                         />
+                        <div>
+                          <p className="text-sm font-medium">
+                            <span
+                              className={
+                                match.didRadiantWin ? 'text-radiant' : ''
+                              }
+                            >
+                              {match.radiantTeam?.name || 'Radiant'}
+                            </span>
+                            <span className="mx-2 text-muted-foreground">
+                              vs
+                            </span>
+                            <span
+                              className={
+                                !match.didRadiantWin ? 'text-dire' : ''
+                              }
+                            >
+                              {match.direTeam?.name || 'Dire'}
+                            </span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {match.league?.name || 'Professional Match'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{hero.localizedName}</p>
+                      <div className="text-right">
+                        <p className="text-sm font-mono text-muted-foreground">
+                          {formatDuration(match.durationSeconds)}
+                        </p>
                         <p className="text-xs text-muted-foreground">
-                          {stat.winRate.toFixed(1)}% winrate
+                          {formatRelativeTime(match.startDateTime)}
                         </p>
                       </div>
-                      <span className="text-sm font-mono text-muted-foreground">
-                        {stat.matchCount}
-                      </span>
                     </Link>
-                  )
-                })}
-                {mostPicked.length === 0 && (
-                  <div className="text-center py-8">
-                    <div className="w-12 h-12 rounded-full bg-secondary/50 flex items-center justify-center mx-auto mb-3">
-                      <Users className="w-6 h-6 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">Loading statistics...</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  ))}
 
-          {/* Recent Matches - Limited to 5 */}
-          <Card className="border-border/40 bg-card/50 backdrop-blur flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-blue-500/10">
-                  <Clock className="w-4 h-4 text-blue-500" />
+                  {recentMatches.length === 0 && (
+                    <p className="py-8 text-center text-muted-foreground">
+                      No recent matches available
+                    </p>
+                  )}
                 </div>
-                <CardTitle className="text-lg">Recent Pro Matches</CardTitle>
-              </div>
-              <Link href="/matches">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary">
-                  View All <ArrowRight className="w-4 h-4 ml-1" />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sidebar - Top Teams */}
+          <div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-primary" />
+                  Top Teams
+                </CardTitle>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/teams">View All</Link>
                 </Button>
-              </Link>
-            </CardHeader>
-            <CardContent className="flex-1">
-              <p className="text-xs text-muted-foreground mb-3">Latest 5 matches</p>
-              <div className="space-y-2">
-                {recentMatches.slice(0, 5).map(match => {
-                  const date = new Date(match.startTime * 1000)
-                  const duration = Math.floor(match.duration / 60)
-                  return (
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {topTeams.map((team, idx) => (
                     <Link
-                      key={match.matchId}
-                      href={`/matches/${match.matchId}`}
-                      className="block p-3 rounded-lg hover:bg-secondary/50 transition-all group"
+                      key={team.id}
+                      href={`/teams/${team.id}`}
+                      className="flex items-center gap-3 rounded-lg border border-border bg-secondary/50 p-3 transition-all hover:border-primary/50 hover:bg-secondary"
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={cn(
-                          'font-medium text-sm truncate max-w-20',
-                          match.radiantWin ? 'text-green-400' : 'text-muted-foreground'
-                        )}>
-                          {match.radiantTeamName || 'Radiant'}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className={cn(
-                            'font-bold',
-                            match.radiantWin ? 'text-green-400' : 'text-muted-foreground'
-                          )}>
-                            {match.radiantScore}
-                          </span>
-                          <span className="text-muted-foreground">-</span>
-                          <span className={cn(
-                            'font-bold',
-                            !match.radiantWin ? 'text-primary' : 'text-muted-foreground'
-                          )}>
-                            {match.direScore}
-                          </span>
-                        </div>
-                        <span className={cn(
-                          'font-medium text-sm truncate max-w-20 text-right',
-                          !match.radiantWin ? 'text-primary' : 'text-muted-foreground'
-                        )}>
-                          {match.direTeamName || 'Dire'}
-                        </span>
+                      <span className="flex h-6 w-6 items-center justify-center rounded bg-primary/10 text-xs font-medium text-primary">
+                        {idx + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {team.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Rating: {Math.round(team.rating)}
+                        </p>
                       </div>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span className="truncate max-w-28">{match.leagueName || 'Pro Match'}</span>
-                        <span>{duration}m | {date.toLocaleDateString()}</span>
+                      <div className="text-right text-xs text-muted-foreground">
+                        <p>
+                          {team.wins}W - {team.losses}L
+                        </p>
                       </div>
                     </Link>
-                  )
-                })}
-                {recentMatches.length === 0 && (
-                  <div className="text-center py-8">
-                    <div className="w-12 h-12 rounded-full bg-secondary/50 flex items-center justify-center mx-auto mb-3">
-                      <Clock className="w-6 h-6 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">Loading matches...</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                  ))}
 
-        {/* Feature Cards */}
-        <section className="mt-12">
-          <h2 className="text-2xl font-bold mb-6">Explore Features</h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            <Link href="/heroes" className="group">
-              <Card className="h-full border-border/40 bg-card/50 backdrop-blur hover:border-primary/50 hover:bg-card/80 transition-all duration-300">
-                <CardContent className="p-6">
-                  <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 w-fit mb-4 group-hover:bg-primary/20 transition-colors">
-                    <Users className="w-8 h-8 text-primary" />
-                  </div>
-                  <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">
-                    Hero Statistics
-                  </h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    Browse all heroes with professional match statistics, counter matchups, 
-                    item builds, and ability skill orders.
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
-            
-            <Link href="/drafts" className="group">
-              <Card className="h-full border-border/40 bg-card/50 backdrop-blur hover:border-primary/50 hover:bg-card/80 transition-all duration-300">
-                <CardContent className="p-6">
-                  <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 w-fit mb-4 group-hover:bg-primary/20 transition-colors">
-                    <Swords className="w-8 h-8 text-primary" />
-                  </div>
-                  <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">
-                    Draft Analytics
-                  </h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    Analyze pick/ban trends, win rates, and contest rates 
-                    across professional tournaments and patches.
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
-            
-            <Link href="/matches" className="group">
-              <Card className="h-full border-border/40 bg-card/50 backdrop-blur hover:border-primary/50 hover:bg-card/80 transition-all duration-300">
-                <CardContent className="p-6">
-                  <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 w-fit mb-4 group-hover:bg-primary/20 transition-colors">
-                    <Map className="w-8 h-8 text-primary" />
-                  </div>
-                  <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">
-                    Match Analysis
-                  </h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    View interactive ward maps, player movements, 
-                    and detailed scoreboards for professional matches.
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
+                  {topTeams.length === 0 && (
+                    <p className="py-8 text-center text-muted-foreground">
+                      No teams available
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Features Card */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg">Features</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-3 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <Swords className="mt-0.5 h-4 w-4 text-primary" />
+                    <span>Hero statistics, builds, and matchups</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Users className="mt-0.5 h-4 w-4 text-primary" />
+                    <span>Pro team rosters and player profiles</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Trophy className="mt-0.5 h-4 w-4 text-primary" />
+                    <span>Tournament brackets and match history</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <TrendingUp className="mt-0.5 h-4 w-4 text-primary" />
+                    <span>Gold/XP graphs and win predictions</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Activity className="mt-0.5 h-4 w-4 text-primary" />
+                    <span>Interactive heat maps and ward locations</span>
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </div>
   )
 }

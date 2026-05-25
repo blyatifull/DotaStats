@@ -1,16 +1,38 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { Navigation } from '@/components/navigation'
+import { Navbar } from '@/components/layout/navbar'
+import { Footer } from '@/components/layout/footer'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const geistSans = Geist({
+  subsets: ['latin'],
+  variable: '--font-geist-sans',
+})
+
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  variable: '--font-geist-mono',
+})
 
 export const metadata: Metadata = {
-  title: 'D2 Pro Analytics - Dota 2 Professional Match Statistics',
-  description: 'Comprehensive Dota 2 pro match statistics, hero analytics, draft trends, ward placements, and meta analysis from TI and Major tournaments',
-  generator: 'v0.app',
+  title: {
+    default: 'DotaStats - Dota 2 Statistics & Analytics',
+    template: '%s | DotaStats',
+  },
+  description:
+    'Comprehensive Dota 2 statistics, hero analytics, team rosters, tournament brackets, and match analysis with detailed graphs and win predictions.',
+  keywords: [
+    'Dota 2',
+    'statistics',
+    'analytics',
+    'heroes',
+    'teams',
+    'tournaments',
+    'esports',
+    'match analysis',
+  ],
+  authors: [{ name: 'DotaStats' }],
   icons: {
     icon: [
       {
@@ -30,16 +52,27 @@ export const metadata: Metadata = {
   },
 }
 
+export const viewport: Viewport = {
+  themeColor: '#c23c2a',
+  width: 'device-width',
+  initialScale: 1,
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="bg-background">
-      <body className="font-sans antialiased min-h-screen">
-        <Navigation />
-        <main>{children}</main>
+    <html lang="en" className="dark bg-background">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+      >
+        <div className="flex min-h-screen flex-col">
+          <Navbar />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </div>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
